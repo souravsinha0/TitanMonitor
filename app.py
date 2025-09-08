@@ -7,6 +7,10 @@ from flask_mail import Mail
 from sqlalchemy.orm import DeclarativeBase
 from werkzeug.middleware.proxy_fix import ProxyFix
 from apscheduler.schedulers.background import BackgroundScheduler
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -24,12 +28,30 @@ app = Flask(__name__)
 app.secret_key = os.environ.get("SESSION_SECRET", "dev-secret-key-change-in-production")
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 
-# Configure the database
-app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL", "sqlite:///webex_monitoring.db")
+# Configure the database - PostgreSQL
+database_url = os.environ.get("DATABASE_URL")
+if not database_url:
+    # Fallback: construct from individual PostgreSQL environment variables
+    pg_host = os.environ.get("PGHOST", "localhost")
+    pg_port = os.environ.get("PGPORT", "5432")
+    pg_user = os.environ.get("PGUSER", "postgres")
+    pg_password = os.environ.get("PGPASSWORD", "")
+    pg_database = os.environ.get("PGDATABASE", "webex_monitoring")
+    database_url = f"postgresql://{pg_user}:{pg_password}@{pg_host}:{pg_port}/{pg_database}"
+
+app.config["SQLALCHEMY_DATABASE_URI"] = database_url
 app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
     "pool_recycle": 300,
     "pool_pre_ping": True,
+    "pool_size": 10,
+    "max_overflow": 20,
 }
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+
+if database_url == os.environ.get("DATABASE_URL"):
+    logging.info("Database configured with PostgreSQL: using DATABASE_URL")
+else:
+    logging.info(f"Database configured with PostgreSQL: {pg_host}:{pg_port}/{pg_database}")
 
 # Configure Flask-Mail
 app.config['MAIL_SERVER'] = os.environ.get('MAIL_SERVER', 'smtp.gmail.com')
