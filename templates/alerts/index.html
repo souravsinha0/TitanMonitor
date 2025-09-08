@@ -1,0 +1,467 @@
+{% extends "base.html" %}
+
+{% block title %}Alerts - VC Monitoring Portal{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1><i class="fas fa-bell me-2"></i>System Alerts</h1>
+    <div>
+        <button class="btn btn-outline-primary" onclick="location.reload()">
+            <i class="fas fa-sync-alt me-2"></i>Refresh
+        </button>
+    </div>
+</div>
+
+<!-- Alert Summary Cards -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <i class="fas fa-exclamation-circle fa-2x text-danger mb-2"></i>
+                <h3 class="mb-0 text-danger" id="criticalCount">0</h3>
+                <p class="text-muted mb-0">Critical Alerts</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <i class="fas fa-exclamation-triangle fa-2x text-warning mb-2"></i>
+                <h3 class="mb-0 text-warning" id="highCount">0</h3>
+                <p class="text-muted mb-0">High Priority</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <i class="fas fa-info-circle fa-2x text-info mb-2"></i>
+                <h3 class="mb-0 text-info" id="mediumCount">0</h3>
+                <p class="text-muted mb-0">Medium Priority</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <i class="fas fa-check-circle fa-2x text-success mb-2"></i>
+                <h3 class="mb-0 text-success" id="resolvedCount">0</h3>
+                <p class="text-muted mb-0">Resolved Today</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="GET" class="row g-3" id="alertFilters">
+            <div class="col-md-3">
+                <label for="room_id" class="form-label">Room</label>
+                <select class="form-select" id="room_id" name="room_id">
+                    <option value="">All Rooms</option>
+                    <!-- Room options will be populated via JavaScript -->
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label for="severity" class="form-label">Severity</label>
+                <select class="form-select" id="severity" name="severity">
+                    <option value="">All Severities</option>
+                    <option value="critical">Critical</option>
+                    <option value="high">High</option>
+                    <option value="medium">Medium</option>
+                    <option value="low">Low</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label for="status" class="form-label">Status</label>
+                <select class="form-select" id="status" name="status">
+                    <option value="">All Status</option>
+                    <option value="open">Open</option>
+                    <option value="acknowledged">Acknowledged</option>
+                    <option value="resolved">Resolved</option>
+                </select>
+            </div>
+            <div class="col-md-3 d-flex align-items-end">
+                <button type="button" class="btn btn-primary me-2" onclick="filterAlerts()">
+                    <i class="fas fa-filter me-2"></i>Filter
+                </button>
+                <button type="button" class="btn btn-outline-secondary" onclick="clearFilters()">
+                    <i class="fas fa-times me-2"></i>Clear
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Alerts Table -->
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0">System Alerts</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover" id="alertsTable">
+                <thead>
+                    <tr>
+                        <th>Timestamp</th>
+                        <th>Room</th>
+                        <th>Severity</th>
+                        <th>Type</th>
+                        <th>Title</th>
+                        <th>Status</th>
+                        <th>Ticket ID</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Table body will be populated via JavaScript -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Alert Details Modal -->
+<div class="modal fade" id="alertDetailsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Alert Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="alertDetailsContent">
+                <!-- Content will be loaded dynamically -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-success" id="acknowledgeBtn" onclick="acknowledgeAlert()">
+                    <i class="fas fa-check me-2"></i>Acknowledge
+                </button>
+                <button type="button" class="btn btn-primary" id="resolveBtn" onclick="resolveAlert()">
+                    <i class="fas fa-check-double me-2"></i>Resolve
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+let alertsTable;
+let currentAlerts = [];
+let selectedAlertId = null;
+
+$(document).ready(function() {
+    // Initialize DataTable
+    alertsTable = $('#alertsTable').DataTable({
+        responsive: true,
+        order: [[0, 'desc']],
+        pageLength: 25,
+        processing: true,
+        columnDefs: [
+            { orderable: false, targets: [-1] } // Disable sorting on actions column
+        ]
+    });
+    
+    // Load initial data
+    loadAlerts();
+    loadRooms();
+    
+    // Auto-refresh every 30 seconds
+    setInterval(loadAlerts, 30000);
+});
+
+function loadAlerts() {
+    // Since we don't have a dedicated alerts API endpoint, we'll simulate the data structure
+    // In a real implementation, this would fetch from /api/alerts
+    
+    // Mock data for demonstration - replace with actual API call
+    const mockAlerts = [
+        {
+            id: 1,
+            timestamp: new Date().toISOString(),
+            room: { id: 1, name: 'Conference Room A', location: 'Building 1, Floor 2' },
+            severity: 'high',
+            alert_type: 'health_check_fail',
+            title: 'Health Check Failed - Conference Room A',
+            description: 'Device is offline and unreachable',
+            status: 'open',
+            ticket_id: 'INC001234'
+        },
+        {
+            id: 2,
+            timestamp: new Date(Date.now() - 3600000).toISOString(),
+            room: { id: 2, name: 'Meeting Room B', location: 'Building 2, Floor 1' },
+            severity: 'medium',
+            alert_type: 'poor_call_quality',
+            title: 'Poor Call Quality - Meeting Room B',
+            description: 'Packet loss above threshold: 7.5%',
+            status: 'acknowledged',
+            ticket_id: 'INC001235'
+        }
+    ];
+    
+    currentAlerts = mockAlerts;
+    updateAlertsTable(mockAlerts);
+    updateAlertCounts(mockAlerts);
+}
+
+function updateAlertsTable(alerts) {
+    alertsTable.clear();
+    
+    alerts.forEach(alert => {
+        const row = [
+            formatTimestamp(alert.timestamp),
+            `<a href="/rooms/${alert.room.id}/details" class="text-decoration-none">
+                <strong>${alert.room.name}</strong><br>
+                <small class="text-muted">${alert.room.location || ''}</small>
+            </a>`,
+            `<span class="badge bg-${getSeverityColor(alert.severity)}">${alert.severity.toUpperCase()}</span>`,
+            `<span class="badge bg-info">${alert.alert_type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}</span>`,
+            alert.title,
+            `<span class="badge bg-${getStatusColor(alert.status)}">${alert.status.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}</span>`,
+            alert.ticket_id || 'None',
+            `<div class="btn-group" role="group">
+                <button class="btn btn-sm btn-outline-primary" onclick="viewAlertDetails(${alert.id})" title="View Details">
+                    <i class="fas fa-eye"></i>
+                </button>
+                ${alert.status === 'open' ? `
+                <button class="btn btn-sm btn-outline-success" onclick="acknowledgeAlert(${alert.id})" title="Acknowledge">
+                    <i class="fas fa-check"></i>
+                </button>
+                ` : ''}
+                ${alert.status !== 'resolved' ? `
+                <button class="btn btn-sm btn-outline-warning" onclick="resolveAlert(${alert.id})" title="Resolve">
+                    <i class="fas fa-check-double"></i>
+                </button>
+                ` : ''}
+            </div>`
+        ];
+        alertsTable.row.add(row);
+    });
+    
+    alertsTable.draw();
+}
+
+function updateAlertCounts(alerts) {
+    const counts = {
+        critical: alerts.filter(a => a.severity === 'critical' && a.status === 'open').length,
+        high: alerts.filter(a => a.severity === 'high' && a.status === 'open').length,
+        medium: alerts.filter(a => a.severity === 'medium' && a.status === 'open').length,
+        resolved: alerts.filter(a => a.status === 'resolved' && isToday(a.resolved_at)).length
+    };
+    
+    document.getElementById('criticalCount').textContent = counts.critical;
+    document.getElementById('highCount').textContent = counts.high;
+    document.getElementById('mediumCount').textContent = counts.medium;
+    document.getElementById('resolvedCount').textContent = counts.resolved;
+}
+
+function loadRooms() {
+    // In a real implementation, this would fetch from /api/rooms
+    const mockRooms = [
+        { id: 1, name: 'Conference Room A' },
+        { id: 2, name: 'Meeting Room B' },
+        { id: 3, name: 'Board Room' }
+    ];
+    
+    const roomSelect = document.getElementById('room_id');
+    mockRooms.forEach(room => {
+        const option = document.createElement('option');
+        option.value = room.id;
+        option.textContent = room.name;
+        roomSelect.appendChild(option);
+    });
+}
+
+function filterAlerts() {
+    const roomId = document.getElementById('room_id').value;
+    const severity = document.getElementById('severity').value;
+    const status = document.getElementById('status').value;
+    
+    let filteredAlerts = currentAlerts;
+    
+    if (roomId) {
+        filteredAlerts = filteredAlerts.filter(a => a.room.id.toString() === roomId);
+    }
+    
+    if (severity) {
+        filteredAlerts = filteredAlerts.filter(a => a.severity === severity);
+    }
+    
+    if (status) {
+        filteredAlerts = filteredAlerts.filter(a => a.status === status);
+    }
+    
+    updateAlertsTable(filteredAlerts);
+}
+
+function clearFilters() {
+    document.getElementById('alertFilters').reset();
+    updateAlertsTable(currentAlerts);
+}
+
+function viewAlertDetails(alertId) {
+    const alert = currentAlerts.find(a => a.id === alertId);
+    if (!alert) return;
+    
+    selectedAlertId = alertId;
+    
+    const content = `
+        <div class="row">
+            <div class="col-md-6">
+                <dl class="row">
+                    <dt class="col-sm-4">Room:</dt>
+                    <dd class="col-sm-8">${alert.room.name}</dd>
+                    
+                    <dt class="col-sm-4">Location:</dt>
+                    <dd class="col-sm-8">${alert.room.location || 'Not specified'}</dd>
+                    
+                    <dt class="col-sm-4">Timestamp:</dt>
+                    <dd class="col-sm-8">${new Date(alert.timestamp).toLocaleString()}</dd>
+                    
+                    <dt class="col-sm-4">Severity:</dt>
+                    <dd class="col-sm-8">
+                        <span class="badge bg-${getSeverityColor(alert.severity)}">${alert.severity.toUpperCase()}</span>
+                    </dd>
+                </dl>
+            </div>
+            <div class="col-md-6">
+                <dl class="row">
+                    <dt class="col-sm-4">Type:</dt>
+                    <dd class="col-sm-8">${alert.alert_type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}</dd>
+                    
+                    <dt class="col-sm-4">Status:</dt>
+                    <dd class="col-sm-8">
+                        <span class="badge bg-${getStatusColor(alert.status)}">${alert.status.toUpperCase()}</span>
+                    </dd>
+                    
+                    <dt class="col-sm-4">Ticket ID:</dt>
+                    <dd class="col-sm-8">${alert.ticket_id || 'None'}</dd>
+                </dl>
+            </div>
+        </div>
+        <hr>
+        <h6>Description:</h6>
+        <p>${alert.description}</p>
+    `;
+    
+    document.getElementById('alertDetailsContent').innerHTML = content;
+    
+    // Show/hide action buttons based on status
+    document.getElementById('acknowledgeBtn').style.display = alert.status === 'open' ? 'inline-block' : 'none';
+    document.getElementById('resolveBtn').style.display = alert.status !== 'resolved' ? 'inline-block' : 'none';
+    
+    const modal = new bootstrap.Modal(document.getElementById('alertDetailsModal'));
+    modal.show();
+}
+
+function acknowledgeAlert(alertId = null) {
+    const id = alertId || selectedAlertId;
+    if (!id) return;
+    
+    // In a real implementation, this would make an API call to acknowledge the alert
+    console.log('Acknowledging alert:', id);
+    
+    // Update local data
+    const alert = currentAlerts.find(a => a.id === id);
+    if (alert) {
+        alert.status = 'acknowledged';
+        updateAlertsTable(currentAlerts);
+        updateAlertCounts(currentAlerts);
+    }
+    
+    const modal = bootstrap.Modal.getInstance(document.getElementById('alertDetailsModal'));
+    if (modal) modal.hide();
+    
+    // Show success message
+    showAlert('Alert acknowledged successfully', 'success');
+}
+
+function resolveAlert(alertId = null) {
+    const id = alertId || selectedAlertId;
+    if (!id) return;
+    
+    // In a real implementation, this would make an API call to resolve the alert
+    console.log('Resolving alert:', id);
+    
+    // Update local data
+    const alert = currentAlerts.find(a => a.id === id);
+    if (alert) {
+        alert.status = 'resolved';
+        alert.resolved_at = new Date().toISOString();
+        updateAlertsTable(currentAlerts);
+        updateAlertCounts(currentAlerts);
+    }
+    
+    const modal = bootstrap.Modal.getInstance(document.getElementById('alertDetailsModal'));
+    if (modal) modal.hide();
+    
+    // Show success message
+    showAlert('Alert resolved successfully', 'success');
+}
+
+function formatTimestamp(timestamp) {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diff = now - date;
+    
+    if (diff < 60000) { // Less than 1 minute
+        return 'Just now';
+    } else if (diff < 3600000) { // Less than 1 hour
+        const minutes = Math.floor(diff / 60000);
+        return `${minutes} minute${minutes !== 1 ? 's' : ''} ago`;
+    } else if (diff < 86400000) { // Less than 1 day
+        const hours = Math.floor(diff / 3600000);
+        return `${hours} hour${hours !== 1 ? 's' : ''} ago`;
+    } else {
+        return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+    }
+}
+
+function getSeverityColor(severity) {
+    const colors = {
+        'low': 'info',
+        'medium': 'warning',
+        'high': 'danger',
+        'critical': 'danger'
+    };
+    return colors[severity] || 'secondary';
+}
+
+function getStatusColor(status) {
+    const colors = {
+        'open': 'danger',
+        'acknowledged': 'warning',
+        'resolved': 'success'
+    };
+    return colors[status] || 'secondary';
+}
+
+function isToday(dateString) {
+    if (!dateString) return false;
+    const date = new Date(dateString);
+    const today = new Date();
+    return date.toDateString() === today.toDateString();
+}
+
+function showAlert(message, type) {
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+    alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    const container = document.querySelector('.container');
+    container.insertBefore(alertDiv, container.firstChild);
+    
+    // Auto-dismiss after 3 seconds
+    setTimeout(() => {
+        alertDiv.remove();
+    }, 3000);
+}
+</script>
+{% endblock %}

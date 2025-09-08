@@ -1,0 +1,239 @@
+{% extends "base.html" %}
+
+{% block title %}Health Checks - VC Monitoring Portal{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1><i class="fas fa-stethoscope me-2"></i>Health Checks</h1>
+    <div>
+        <button class="btn btn-outline-primary" onclick="location.reload()">
+            <i class="fas fa-sync-alt me-2"></i>Refresh
+        </button>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="GET" class="row g-3">
+            <div class="col-md-4">
+                <label for="room_id" class="form-label">Room</label>
+                <select class="form-select" id="room_id" name="room_id">
+                    <option value="">All Rooms</option>
+                    {% for room in rooms %}
+                    <option value="{{ room.id }}" {% if selected_room_id == room.id %}selected{% endif %}>
+                        {{ room.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label for="status" class="form-label">Status</label>
+                <select class="form-select" id="status" name="status">
+                    <option value="">All Status</option>
+                    <option value="pass" {% if selected_status == 'pass' %}selected{% endif %}>Pass</option>
+                    <option value="fail" {% if selected_status == 'fail' %}selected{% endif %}>Fail</option>
+                    <option value="warning" {% if selected_status == 'warning' %}selected{% endif %}>Warning</option>
+                    <option value="error" {% if selected_status == 'error' %}selected{% endif %}>Error</option>
+                </select>
+            </div>
+            <div class="col-md-4 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary me-2">
+                    <i class="fas fa-filter me-2"></i>Filter
+                </button>
+                <a href="{{ url_for('monitoring.health_checks') }}" class="btn btn-outline-secondary">
+                    <i class="fas fa-times me-2"></i>Clear
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Health Checks Table -->
+{% if health_checks.items %}
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0">Health Check Results</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover" id="healthChecksTable">
+                <thead>
+                    <tr>
+                        <th>Room</th>
+                        <th>Timestamp</th>
+                        <th>Status</th>
+                        <th>Device Online</th>
+                        <th>Camera</th>
+                        <th>Microphone</th>
+                        <th>Speaker</th>
+                        <th>Software Version</th>
+                        <th>Uptime</th>
+                        <th>Temperature</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for check in health_checks.items %}
+                    <tr>
+                        <td>
+                            <a href="{{ url_for('rooms.details', room_id=check.room.id) }}" class="text-decoration-none">
+                                <strong>{{ check.room.name }}</strong>
+                            </a>
+                            {% if check.room.location %}
+                            <br><small class="text-muted">{{ check.room.location }}</small>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span title="{{ check.timestamp.strftime('%Y-%m-%d %H:%M:%S UTC') }}">
+                                {{ format_timestamp(check.timestamp) }}
+                            </span>
+                        </td>
+                        <td>
+                            <span class="badge bg-{{ get_status_color(check.status) }}">
+                                {{ check.status|title }}
+                            </span>
+                        </td>
+                        <td>
+                            {% if check.device_online %}
+                                <i class="fas fa-check-circle text-success" title="Online"></i>
+                            {% elif check.device_online is none %}
+                                <i class="fas fa-question-circle text-muted" title="Unknown"></i>
+                            {% else %}
+                                <i class="fas fa-times-circle text-danger" title="Offline"></i>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="badge bg-{{ get_status_color(check.camera_status) }} small">
+                                <i class="fas fa-camera"></i>
+                            </span>
+                        </td>
+                        <td>
+                            <span class="badge bg-{{ get_status_color(check.microphone_status) }} small">
+                                <i class="fas fa-microphone"></i>
+                            </span>
+                        </td>
+                        <td>
+                            <span class="badge bg-{{ get_status_color(check.speaker_status) }} small">
+                                <i class="fas fa-volume-up"></i>
+                            </span>
+                        </td>
+                        <td>{{ check.software_version or 'Unknown' }}</td>
+                        <td>
+                            {% if check.uptime_hours %}
+                                {{ format_duration(check.uptime_hours * 3600) }}
+                            {% else %}
+                                N/A
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if check.temperature %}
+                                <span class="{% if check.temperature > 35 %}text-danger{% elif check.temperature > 30 %}text-warning{% else %}text-success{% endif %}">
+                                    {{ "%.1f"|format(check.temperature) }}°C
+                                </span>
+                            {% else %}
+                                N/A
+                            {% endif %}
+                        </td>
+                        <td>
+                            <form method="POST" action="{{ url_for('monitoring.run_health_check', room_id=check.room.id) }}" class="d-inline">
+                                <button type="submit" class="btn btn-sm btn-outline-primary" title="Run Health Check">
+                                    <i class="fas fa-stethoscope"></i>
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% if check.error_message %}
+                    <tr class="table-warning">
+                        <td colspan="11">
+                            <small><strong>Error:</strong> {{ check.error_message }}</small>
+                        </td>
+                    </tr>
+                    {% endif %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <!-- Pagination -->
+    <div class="card-footer">
+        <div class="d-flex justify-content-between align-items-center">
+            <small class="text-muted">
+                Showing {{ health_checks.per_page * (health_checks.page - 1) + 1 }} to 
+                {{ health_checks.per_page * (health_checks.page - 1) + health_checks.items|length }} of 
+                {{ health_checks.total }} entries
+            </small>
+            
+            {% if health_checks.pages > 1 %}
+            <nav>
+                <ul class="pagination pagination-sm mb-0">
+                    {% if health_checks.has_prev %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('monitoring.health_checks', page=health_checks.prev_num, room_id=selected_room_id, status=selected_status) }}">
+                            Previous
+                        </a>
+                    </li>
+                    {% endif %}
+                    
+                    {% for page_num in health_checks.iter_pages(left_edge=1, right_edge=1, left_current=1, right_current=2) %}
+                        {% if page_num %}
+                            {% if page_num != health_checks.page %}
+                            <li class="page-item">
+                                <a class="page-link" href="{{ url_for('monitoring.health_checks', page=page_num, room_id=selected_room_id, status=selected_status) }}">
+                                    {{ page_num }}
+                                </a>
+                            </li>
+                            {% else %}
+                            <li class="page-item active">
+                                <span class="page-link">{{ page_num }}</span>
+                            </li>
+                            {% endif %}
+                        {% else %}
+                        <li class="page-item disabled">
+                            <span class="page-link">…</span>
+                        </li>
+                        {% endif %}
+                    {% endfor %}
+                    
+                    {% if health_checks.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('monitoring.health_checks', page=health_checks.next_num, room_id=selected_room_id, status=selected_status) }}">
+                            Next
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="card">
+    <div class="card-body text-center py-5">
+        <i class="fas fa-stethoscope fa-3x text-muted mb-3"></i>
+        <h4>No Health Checks Found</h4>
+        {% if selected_room_id or selected_status %}
+        <p class="text-muted">No health checks match the current filters.</p>
+        <a href="{{ url_for('monitoring.health_checks') }}" class="btn btn-outline-primary">
+            <i class="fas fa-times me-2"></i>Clear Filters
+        </a>
+        {% else %}
+        <p class="text-muted">Health checks will appear here once they start running.</p>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+$(document).ready(function() {
+    // Auto-refresh every 2 minutes
+    setTimeout(function() {
+        location.reload();
+    }, 120000);
+});
+</script>
+{% endblock %}

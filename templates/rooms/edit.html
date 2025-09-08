@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Room - VC Monitoring Portal{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1><i class="fas fa-edit me-2"></i>Edit Room</h1>
+    <a href="{{ url_for('rooms.index') }}" class="btn btn-secondary">
+        <i class="fas fa-arrow-left me-2"></i>Back to Rooms
+    </a>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Room Configuration</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="name" class="form-label">Room Name *</label>
+                                <input type="text" class="form-control" id="name" name="name" 
+                                       value="{{ room.name }}" required>
+                                <div class="form-text">Friendly name for the room</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="location" class="form-label">Location</label>
+                                <input type="text" class="form-control" id="location" name="location" 
+                                       value="{{ room.location or '' }}">
+                                <div class="form-text">Physical location</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="room_id" class="form-label">Cisco Room ID *</label>
+                                <input type="text" class="form-control" id="room_id" name="room_id" 
+                                       value="{{ room.room_id }}" required>
+                                <div class="form-text">Unique identifier from Cisco Webex Admin portal</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="ip_address" class="form-label">IP Address</label>
+                                <input type="text" class="form-control" id="ip_address" name="ip_address" 
+                                       value="{{ room.ip_address or '' }}"
+                                       pattern="^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$">
+                                <div class="form-text">IP address for direct RoomOS API access</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="device_type" class="form-label">Device Type</label>
+                        <select class="form-select" id="device_type" name="device_type">
+                            <option value="RoomOS" {% if room.device_type == 'RoomOS' %}selected{% endif %}>RoomOS Device</option>
+                            <option value="Webex Room Kit" {% if room.device_type == 'Webex Room Kit' %}selected{% endif %}>Webex Room Kit</option>
+                            <option value="Webex Room Kit Mini" {% if room.device_type == 'Webex Room Kit Mini' %}selected{% endif %}>Webex Room Kit Mini</option>
+                            <option value="Webex Room Kit Pro" {% if room.device_type == 'Webex Room Kit Pro' %}selected{% endif %}>Webex Room Kit Pro</option>
+                            <option value="Webex Board" {% if room.device_type == 'Webex Board' %}selected{% endif %}>Webex Board</option>
+                            <option value="Webex Desk" {% if room.device_type == 'Webex Desk' %}selected{% endif %}>Webex Desk</option>
+                            <option value="Other" {% if room.device_type == 'Other' %}selected{% endif %}>Other</option>
+                        </select>
+                    </div>
+                    
+                    <hr>
+                    <h6 class="mb-3">Monitoring Configuration</h6>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="health_check_enabled" 
+                                           name="health_check_enabled" {% if room.health_check_enabled %}checked{% endif %}>
+                                    <label class="form-check-label" for="health_check_enabled">
+                                        Enable Daily Health Checks
+                                    </label>
+                                </div>
+                                <div class="form-text">Automatically check device status daily</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="test_call_enabled" 
+                                           name="test_call_enabled" {% if room.test_call_enabled %}checked{% endif %}>
+                                    <label class="form-check-label" for="test_call_enabled">
+                                        Enable Test Calls
+                                    </label>
+                                </div>
+                                <div class="form-text">Automatically run test calls for quality monitoring</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="test_call_time" class="form-label">Test Call Time</label>
+                        <input type="time" class="form-control" id="test_call_time" name="test_call_time" 
+                               value="{{ room.test_call_time or '07:00' }}"
+                               {% if not room.test_call_enabled %}disabled{% endif %}>
+                        <div class="form-text">Daily time for automated test calls (24-hour format)</div>
+                    </div>
+                    
+                    <div class="d-flex justify-content-between">
+                        <a href="{{ url_for('rooms.index') }}" class="btn btn-secondary">
+                            <i class="fas fa-times me-2"></i>Cancel
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save me-2"></i>Save Changes
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <!-- Room Statistics -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-chart-line me-2"></i>Room Statistics</h5>
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-md-3">
+                        <h6 class="text-muted">Current Status</h6>
+                        <span class="badge bg-{{ get_status_color(room.status) }} fs-6">
+                            {{ room.status|title }}
+                        </span>
+                    </div>
+                    <div class="col-md-3">
+                        <h6 class="text-muted">Last Health Check</h6>
+                        <p class="mb-0">{{ format_timestamp(room.last_health_check) }}</p>
+                    </div>
+                    <div class="col-md-3">
+                        <h6 class="text-muted">Created</h6>
+                        <p class="mb-0">{{ room.created_at.strftime('%Y-%m-%d') }}</p>
+                    </div>
+                    <div class="col-md-3">
+                        <h6 class="text-muted">Last Updated</h6>
+                        <p class="mb-0">{{ room.updated_at.strftime('%Y-%m-%d') }}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// Enable/disable test call time based on test call enabled checkbox
+document.getElementById('test_call_enabled').addEventListener('change', function() {
+    document.getElementById('test_call_time').disabled = !this.checked;
+});
+
+// Validate IP address format
+document.getElementById('ip_address').addEventListener('blur', function() {
+    const ip = this.value.trim();
+    if (ip && !this.checkValidity()) {
+        this.classList.add('is-invalid');
+    } else {
+        this.classList.remove('is-invalid');
+    }
+});
+</script>
+{% endblock %}

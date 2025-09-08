@@ -1,0 +1,358 @@
+{% extends "base.html" %}
+
+{% block title %}{{ room.name }} - Room Details{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1><i class="fas fa-desktop me-2"></i>{{ room.name }}</h1>
+        <p class="text-muted mb-0">{{ room.location or 'Location not specified' }}</p>
+    </div>
+    <div>
+        <a href="{{ url_for('rooms.index') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left me-2"></i>Back to Rooms
+        </a>
+        {% if current_user.is_admin %}
+        <a href="{{ url_for('rooms.edit', room_id=room.id) }}" class="btn btn-primary">
+            <i class="fas fa-edit me-2"></i>Edit Room
+        </a>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Room Information -->
+<div class="row mb-4">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-info-circle me-2"></i>Room Information</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <dl class="row">
+                            <dt class="col-sm-4">Status:</dt>
+                            <dd class="col-sm-8">
+                                <span class="badge bg-{{ get_status_color(room.status) }}">
+                                    <i class="fas fa-circle me-1"></i>{{ room.status|title }}
+                                </span>
+                            </dd>
+                            
+                            <dt class="col-sm-4">Device Type:</dt>
+                            <dd class="col-sm-8">{{ room.device_type }}</dd>
+                            
+                            <dt class="col-sm-4">Room ID:</dt>
+                            <dd class="col-sm-8"><code>{{ room.room_id }}</code></dd>
+                            
+                            <dt class="col-sm-4">IP Address:</dt>
+                            <dd class="col-sm-8">{{ room.ip_address or 'Not configured' }}</dd>
+                        </dl>
+                    </div>
+                    <div class="col-md-6">
+                        <dl class="row">
+                            <dt class="col-sm-4">Health Checks:</dt>
+                            <dd class="col-sm-8">
+                                {% if room.health_check_enabled %}
+                                    <span class="badge bg-success">Enabled</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">Disabled</span>
+                                {% endif %}
+                            </dd>
+                            
+                            <dt class="col-sm-4">Test Calls:</dt>
+                            <dd class="col-sm-8">
+                                {% if room.test_call_enabled %}
+                                    <span class="badge bg-success">Enabled</span>
+                                    <br><small class="text-muted">Daily at {{ room.test_call_time }}</small>
+                                {% else %}
+                                    <span class="badge bg-secondary">Disabled</span>
+                                {% endif %}
+                            </dd>
+                            
+                            <dt class="col-sm-4">Last Check:</dt>
+                            <dd class="col-sm-8">{{ format_timestamp(room.last_health_check) }}</dd>
+                            
+                            <dt class="col-sm-4">Created:</dt>
+                            <dd class="col-sm-8">{{ room.created_at.strftime('%Y-%m-%d %H:%M') }}</dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-tools me-2"></i>Quick Actions</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <form method="POST" action="{{ url_for('monitoring.run_health_check', room_id=room.id) }}">
+                        <button type="submit" class="btn btn-outline-info w-100">
+                            <i class="fas fa-stethoscope me-2"></i>Run Health Check
+                        </button>
+                    </form>
+                    
+                    {% if room.test_call_enabled %}
+                    <form method="POST" action="{{ url_for('monitoring.run_test_call', room_id=room.id) }}">
+                        <button type="submit" class="btn btn-outline-success w-100">
+                            <i class="fas fa-phone me-2"></i>Run Test Call
+                        </button>
+                    </form>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tabs for different data views -->
+<ul class="nav nav-tabs mb-3" id="roomTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="health-tab" data-bs-toggle="tab" data-bs-target="#health" type="button" role="tab">
+            <i class="fas fa-stethoscope me-2"></i>Health Checks
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="calls-tab" data-bs-toggle="tab" data-bs-target="#calls" type="button" role="tab">
+            <i class="fas fa-phone me-2"></i>Test Calls
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="alerts-tab" data-bs-toggle="tab" data-bs-target="#alerts" type="button" role="tab">
+            <i class="fas fa-bell me-2"></i>Alerts
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content" id="roomTabsContent">
+    <!-- Health Checks Tab -->
+    <div class="tab-pane fade show active" id="health" role="tabpanel">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Recent Health Checks</h5>
+            </div>
+            <div class="card-body">
+                {% if health_checks %}
+                <div class="table-responsive">
+                    <table class="table table-striped" id="healthChecksTable">
+                        <thead>
+                            <tr>
+                                <th>Timestamp</th>
+                                <th>Status</th>
+                                <th>Device Online</th>
+                                <th>Peripherals</th>
+                                <th>Software Version</th>
+                                <th>Uptime</th>
+                                <th>Temperature</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for check in health_checks %}
+                            <tr>
+                                <td>{{ check.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                                <td>
+                                    <span class="badge bg-{{ get_status_color(check.status) }}">
+                                        {{ check.status|title }}
+                                    </span>
+                                </td>
+                                <td>
+                                    {% if check.device_online %}
+                                        <i class="fas fa-check-circle text-success"></i> Online
+                                    {% else %}
+                                        <i class="fas fa-times-circle text-danger"></i> Offline
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="d-flex gap-1">
+                                        <span class="badge bg-{{ get_status_color(check.camera_status) }} small" title="Camera">
+                                            <i class="fas fa-camera"></i>
+                                        </span>
+                                        <span class="badge bg-{{ get_status_color(check.microphone_status) }} small" title="Microphone">
+                                            <i class="fas fa-microphone"></i>
+                                        </span>
+                                        <span class="badge bg-{{ get_status_color(check.speaker_status) }} small" title="Speaker">
+                                            <i class="fas fa-volume-up"></i>
+                                        </span>
+                                    </div>
+                                </td>
+                                <td>{{ check.software_version or 'Unknown' }}</td>
+                                <td>{{ format_duration(check.uptime_hours * 3600 if check.uptime_hours else None) }}</td>
+                                <td>
+                                    {% if check.temperature %}
+                                        {{ "%.1f"|format(check.temperature) }}°C
+                                    {% else %}
+                                        N/A
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted text-center py-4">No health checks performed yet</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Test Calls Tab -->
+    <div class="tab-pane fade" id="calls" role="tabpanel">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Recent Test Calls</h5>
+            </div>
+            <div class="card-body">
+                {% if test_calls %}
+                <div class="table-responsive">
+                    <table class="table table-striped" id="testCallsTable">
+                        <thead>
+                            <tr>
+                                <th>Timestamp</th>
+                                <th>Status</th>
+                                <th>Duration</th>
+                                <th>Quality Score</th>
+                                <th>Packet Loss</th>
+                                <th>Jitter</th>
+                                <th>Latency</th>
+                                <th>Resolution</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for call in test_calls %}
+                            <tr>
+                                <td>{{ call.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                                <td>
+                                    <span class="badge bg-{{ get_status_color(call.status) }}">
+                                        {{ call.status|title }}
+                                    </span>
+                                </td>
+                                <td>{{ format_duration(call.duration_seconds) }}</td>
+                                <td>
+                                    {% if call.call_quality_score %}
+                                        <span class="badge bg-{% if call.call_quality_score >= 8 %}success{% elif call.call_quality_score >= 6 %}warning{% else %}danger{% endif %}">
+                                            {{ call.call_quality_score }}/10
+                                        </span>
+                                    {% else %}
+                                        N/A
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if call.packet_loss_percent is not none %}
+                                        <span class="{% if call.packet_loss_percent > 5 %}text-danger{% elif call.packet_loss_percent > 2 %}text-warning{% else %}text-success{% endif %}">
+                                            {{ "%.2f"|format(call.packet_loss_percent) }}%
+                                        </span>
+                                    {% else %}
+                                        N/A
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if call.jitter_ms is not none %}
+                                        <span class="{% if call.jitter_ms > 30 %}text-danger{% elif call.jitter_ms > 20 %}text-warning{% else %}text-success{% endif %}">
+                                            {{ "%.1f"|format(call.jitter_ms) }}ms
+                                        </span>
+                                    {% else %}
+                                        N/A
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if call.latency_ms is not none %}
+                                        <span class="{% if call.latency_ms > 150 %}text-danger{% elif call.latency_ms > 100 %}text-warning{% else %}text-success{% endif %}">
+                                            {{ "%.1f"|format(call.latency_ms) }}ms
+                                        </span>
+                                    {% else %}
+                                        N/A
+                                    {% endif %}
+                                </td>
+                                <td>{{ call.resolution or 'Unknown' }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted text-center py-4">No test calls performed yet</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Alerts Tab -->
+    <div class="tab-pane fade" id="alerts" role="tabpanel">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Recent Alerts</h5>
+            </div>
+            <div class="card-body">
+                {% if alerts %}
+                <div class="table-responsive">
+                    <table class="table table-striped" id="alertsTable">
+                        <thead>
+                            <tr>
+                                <th>Timestamp</th>
+                                <th>Type</th>
+                                <th>Severity</th>
+                                <th>Title</th>
+                                <th>Status</th>
+                                <th>Ticket ID</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for alert in alerts %}
+                            <tr>
+                                <td>{{ alert.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                                <td>
+                                    <span class="badge bg-info">{{ alert.alert_type.replace('_', ' ')|title }}</span>
+                                </td>
+                                <td>
+                                    <span class="badge bg-{{ get_severity_color(alert.severity) }}">
+                                        {{ alert.severity|title }}
+                                    </span>
+                                </td>
+                                <td>{{ alert.title }}</td>
+                                <td>
+                                    <span class="badge bg-{{ get_status_color(alert.status) }}">
+                                        {{ alert.status|title }}
+                                    </span>
+                                </td>
+                                <td>{{ alert.ticket_id or 'None' }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-success text-center py-4">No alerts for this room</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+$(document).ready(function() {
+    // Initialize DataTables for each tab
+    $('#healthChecksTable').DataTable({
+        responsive: true,
+        order: [[0, 'desc']],
+        pageLength: 15
+    });
+    
+    $('#testCallsTable').DataTable({
+        responsive: true,
+        order: [[0, 'desc']],
+        pageLength: 15
+    });
+    
+    $('#alertsTable').DataTable({
+        responsive: true,
+        order: [[0, 'desc']],
+        pageLength: 15
+    });
+});
+</script>
+{% endblock %}

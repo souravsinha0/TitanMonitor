@@ -1,0 +1,283 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - VC Monitoring Portal{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1><i class="fas fa-tachometer-alt me-2"></i>Dashboard</h1>
+    <div>
+        <button class="btn btn-outline-primary" onclick="refreshData()">
+            <i class="fas fa-sync-alt me-2"></i>Refresh
+        </button>
+    </div>
+</div>
+
+<!-- Summary Cards -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h5 class="card-title text-muted">Total Rooms</h5>
+                        <h2 class="mb-0">{{ total_rooms }}</h2>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-desktop fa-2x text-primary"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h5 class="card-title text-muted">Online Rooms</h5>
+                        <h2 class="mb-0 text-success">{{ online_rooms }}</h2>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-check-circle fa-2x text-success"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h5 class="card-title text-muted">Offline Rooms</h5>
+                        <h2 class="mb-0 text-danger">{{ offline_rooms }}</h2>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-exclamation-circle fa-2x text-danger"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h5 class="card-title text-muted">Open Alerts</h5>
+                        <h2 class="mb-0 text-warning">{{ open_alerts|length }}</h2>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-bell fa-2x text-warning"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Charts Row -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-chart-line me-2"></i>Room Uptime (30 Days)</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="uptimeChart"></canvas>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-signal me-2"></i>Call Quality (7 Days)</h5>
+            </div>
+            <div class="card-body">
+                {% if call_quality_stats %}
+                <div class="row text-center">
+                    <div class="col-4">
+                        <h6 class="text-muted">Avg Packet Loss</h6>
+                        <h4 class="{% if call_quality_stats.avg_packet_loss and call_quality_stats.avg_packet_loss > 5 %}text-danger{% else %}text-success{% endif %}">
+                            {{ "%.2f"|format(call_quality_stats.avg_packet_loss or 0) }}%
+                        </h4>
+                    </div>
+                    <div class="col-4">
+                        <h6 class="text-muted">Avg Jitter</h6>
+                        <h4 class="{% if call_quality_stats.avg_jitter and call_quality_stats.avg_jitter > 30 %}text-danger{% else %}text-success{% endif %}">
+                            {{ "%.1f"|format(call_quality_stats.avg_jitter or 0) }}ms
+                        </h4>
+                    </div>
+                    <div class="col-4">
+                        <h6 class="text-muted">Avg Latency</h6>
+                        <h4 class="{% if call_quality_stats.avg_latency and call_quality_stats.avg_latency > 150 %}text-danger{% else %}text-success{% endif %}">
+                            {{ "%.1f"|format(call_quality_stats.avg_latency or 0) }}ms
+                        </h4>
+                    </div>
+                </div>
+                <hr>
+                <div class="row text-center">
+                    <div class="col-6">
+                        <h6 class="text-muted">Total Calls</h6>
+                        <h4>{{ call_quality_stats.total_calls or 0 }}</h4>
+                    </div>
+                    <div class="col-6">
+                        <h6 class="text-muted">Success Rate</h6>
+                        <h4 class="text-success">
+                            {% if call_quality_stats.total_calls and call_quality_stats.total_calls > 0 %}
+                                {{ "%.1f"|format((call_quality_stats.successful_calls or 0) / call_quality_stats.total_calls * 100) }}%
+                            {% else %}
+                                N/A
+                            {% endif %}
+                        </h4>
+                    </div>
+                </div>
+                {% else %}
+                <p class="text-muted text-center">No call quality data available</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Activity -->
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-stethoscope me-2"></i>Recent Health Checks</h5>
+            </div>
+            <div class="card-body">
+                {% if recent_health_checks %}
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Room</th>
+                                <th>Status</th>
+                                <th>Time</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for check in recent_health_checks %}
+                            <tr>
+                                <td>{{ check.room.name }}</td>
+                                <td>
+                                    <span class="badge bg-{{ get_status_color(check.status) }}">
+                                        {{ check.status|title }}
+                                    </span>
+                                </td>
+                                <td class="text-muted">{{ format_timestamp(check.timestamp) }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted text-center">No recent health checks</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-bell me-2"></i>Recent Alerts</h5>
+            </div>
+            <div class="card-body">
+                {% if open_alerts %}
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Room</th>
+                                <th>Severity</th>
+                                <th>Alert</th>
+                                <th>Time</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for alert in open_alerts %}
+                            <tr>
+                                <td>{{ alert.room.name }}</td>
+                                <td>
+                                    <span class="badge bg-{{ get_severity_color(alert.severity) }}">
+                                        {{ alert.severity|title }}
+                                    </span>
+                                </td>
+                                <td>{{ alert.title }}</td>
+                                <td class="text-muted">{{ format_timestamp(alert.timestamp) }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-success text-center">No open alerts</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// Room Uptime Chart
+const uptimeData = [
+    {% for room_name, total_checks, online_checks in uptime_data %}
+    {
+        name: "{{ room_name }}",
+        uptime: {{ (online_checks / total_checks * 100) if total_checks > 0 else 0 }}
+    },
+    {% endfor %}
+];
+
+if (uptimeData.length > 0) {
+    const ctx = document.getElementById('uptimeChart').getContext('2d');
+    new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: uptimeData.map(d => d.name),
+            datasets: [{
+                label: 'Uptime %',
+                data: uptimeData.map(d => d.uptime),
+                backgroundColor: uptimeData.map(d => d.uptime >= 95 ? '#198754' : d.uptime >= 90 ? '#fd7e14' : '#dc3545'),
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    display: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 100,
+                    ticks: {
+                        callback: function(value) {
+                            return value + '%';
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+function refreshData() {
+    location.reload();
+}
+
+// Auto-refresh every 5 minutes
+setInterval(refreshData, 300000);
+</script>
+{% endblock %}

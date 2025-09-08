@@ -1,0 +1,327 @@
+{% extends "base.html" %}
+
+{% block title %}Reports - VC Monitoring Portal{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1><i class="fas fa-chart-bar me-2"></i>Reports & Analytics</h1>
+</div>
+
+<!-- Date Range and Filters -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="fas fa-filter me-2"></i>Report Filters</h5>
+    </div>
+    <div class="card-body">
+        <form method="GET" class="row g-3">
+            <div class="col-md-3">
+                <label for="start_date" class="form-label">Start Date</label>
+                <input type="date" class="form-control" id="start_date" name="start_date" value="{{ start_date }}">
+            </div>
+            <div class="col-md-3">
+                <label for="end_date" class="form-label">End Date</label>
+                <input type="date" class="form-control" id="end_date" name="end_date" value="{{ end_date }}">
+            </div>
+            <div class="col-md-4">
+                <label for="room_id" class="form-label">Room</label>
+                <select class="form-select" id="room_id" name="room_id">
+                    <option value="">All Rooms</option>
+                    {% for room in rooms %}
+                    <option value="{{ room.id }}" {% if selected_room_id == room.id %}selected{% endif %}>
+                        {{ room.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary w-100">
+                    <i class="fas fa-search me-2"></i>Generate Report
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Summary Statistics -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <i class="fas fa-stethoscope fa-2x text-primary mb-2"></i>
+                <h3 class="mb-0">{{ health_check_stats.total_checks or 0 }}</h3>
+                <p class="text-muted mb-0">Total Health Checks</p>
+                {% if health_check_stats.total_checks and health_check_stats.total_checks > 0 %}
+                <small class="text-success">
+                    {{ "%.1f"|format((health_check_stats.passed_checks or 0) / health_check_stats.total_checks * 100) }}% passed
+                </small>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <i class="fas fa-phone fa-2x text-success mb-2"></i>
+                <h3 class="mb-0">{{ test_call_stats.total_calls or 0 }}</h3>
+                <p class="text-muted mb-0">Total Test Calls</p>
+                {% if test_call_stats.total_calls and test_call_stats.total_calls > 0 %}
+                <small class="text-success">
+                    {{ "%.1f"|format((test_call_stats.completed_calls or 0) / test_call_stats.total_calls * 100) }}% completed
+                </small>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <i class="fas fa-bell fa-2x text-warning mb-2"></i>
+                <h3 class="mb-0">{{ alert_stats.total_alerts or 0 }}</h3>
+                <p class="text-muted mb-0">Total Alerts</p>
+                {% if alert_stats.total_alerts and alert_stats.total_alerts > 0 %}
+                <small class="text-{% if alert_stats.resolved_alerts and alert_stats.resolved_alerts == alert_stats.total_alerts %}success{% else %}warning{% endif %}">
+                    {{ alert_stats.resolved_alerts or 0 }} resolved
+                </small>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <i class="fas fa-signal fa-2x text-info mb-2"></i>
+                <h3 class="mb-0">
+                    {% if test_call_stats.avg_packet_loss is not none %}
+                        {{ "%.2f"|format(test_call_stats.avg_packet_loss) }}%
+                    {% else %}
+                        N/A
+                    {% endif %}
+                </h3>
+                <p class="text-muted mb-0">Avg Packet Loss</p>
+                {% if test_call_stats.avg_packet_loss is not none %}
+                <small class="{% if test_call_stats.avg_packet_loss > 5 %}text-danger{% elif test_call_stats.avg_packet_loss > 2 %}text-warning{% else %}text-success{% endif %}">
+                    Threshold: &lt;5%
+                </small>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Export Buttons -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="fas fa-download me-2"></i>Export Data</h5>
+    </div>
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-4">
+                <a href="{{ url_for('reports.export_health_checks', start_date=start_date, end_date=end_date, room_id=selected_room_id) }}" 
+                   class="btn btn-outline-primary w-100">
+                    <i class="fas fa-file-csv me-2"></i>Export Health Checks (CSV)
+                </a>
+            </div>
+            <div class="col-md-4">
+                <a href="{{ url_for('reports.export_test_calls', start_date=start_date, end_date=end_date, room_id=selected_room_id) }}" 
+                   class="btn btn-outline-success w-100">
+                    <i class="fas fa-file-csv me-2"></i>Export Test Calls (CSV)
+                </a>
+            </div>
+            <div class="col-md-4">
+                <a href="{{ url_for('reports.export_alerts', start_date=start_date, end_date=end_date, room_id=selected_room_id) }}" 
+                   class="btn btn-outline-warning w-100">
+                    <i class="fas fa-file-csv me-2"></i>Export Alerts (CSV)
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Room-wise Statistics -->
+{% if room_stats %}
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="fas fa-desktop me-2"></i>Room-wise Performance</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover" id="roomStatsTable">
+                <thead>
+                    <tr>
+                        <th>Room Name</th>
+                        <th>Health Checks</th>
+                        <th>Health Check Success Rate</th>
+                        <th>Test Calls</th>
+                        <th>Test Call Success Rate</th>
+                        <th>Overall Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for room in room_stats %}
+                    <tr>
+                        <td>
+                            <a href="{{ url_for('rooms.details', room_id=room.id) }}" class="text-decoration-none">
+                                <strong>{{ room.name }}</strong>
+                            </a>
+                        </td>
+                        <td>{{ room.health_checks or 0 }}</td>
+                        <td>
+                            {% if room.health_checks and room.health_checks > 0 %}
+                                {% set success_rate = (room.passed_checks or 0) / room.health_checks * 100 %}
+                                <span class="{% if success_rate >= 95 %}text-success{% elif success_rate >= 85 %}text-warning{% else %}text-danger{% endif %}">
+                                    {{ "%.1f"|format(success_rate) }}%
+                                </span>
+                                <div class="progress mt-1" style="height: 4px;">
+                                    <div class="progress-bar bg-{% if success_rate >= 95 %}success{% elif success_rate >= 85 %}warning{% else %}danger{% endif %}" 
+                                         style="width: {{ success_rate }}%"></div>
+                                </div>
+                            {% else %}
+                                <span class="text-muted">No data</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ room.test_calls or 0 }}</td>
+                        <td>
+                            {% if room.test_calls and room.test_calls > 0 %}
+                                {% set call_success_rate = (room.completed_calls or 0) / room.test_calls * 100 %}
+                                <span class="{% if call_success_rate >= 95 %}text-success{% elif call_success_rate >= 85 %}text-warning{% else %}text-danger{% endif %}">
+                                    {{ "%.1f"|format(call_success_rate) }}%
+                                </span>
+                                <div class="progress mt-1" style="height: 4px;">
+                                    <div class="progress-bar bg-{% if call_success_rate >= 95 %}success{% elif call_success_rate >= 85 %}warning{% else %}danger{% endif %}" 
+                                         style="width: {{ call_success_rate }}%"></div>
+                                </div>
+                            {% else %}
+                                <span class="text-muted">No data</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if room.health_checks and room.health_checks > 0 and room.test_calls and room.test_calls > 0 %}
+                                {% set health_rate = (room.passed_checks or 0) / room.health_checks * 100 %}
+                                {% set call_rate = (room.completed_calls or 0) / room.test_calls * 100 %}
+                                {% set overall_rate = (health_rate + call_rate) / 2 %}
+                                <span class="badge bg-{% if overall_rate >= 95 %}success{% elif overall_rate >= 85 %}warning{% else %}danger{% endif %} fs-6">
+                                    {{ "%.1f"|format(overall_rate) }}%
+                                </span>
+                            {% else %}
+                                <span class="badge bg-secondary">Insufficient Data</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Quality Metrics Chart -->
+{% if test_call_stats.avg_packet_loss is not none or test_call_stats.avg_jitter is not none or test_call_stats.avg_latency is not none %}
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-chart-line me-2"></i>Average Call Quality Metrics</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="qualityMetricsChart" style="max-height: 400px;"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+$(document).ready(function() {
+    // Initialize DataTable
+    $('#roomStatsTable').DataTable({
+        responsive: true,
+        order: [[0, 'asc']],
+        pageLength: 15
+    });
+    
+    // Quality Metrics Chart
+    {% if test_call_stats.avg_packet_loss is not none or test_call_stats.avg_jitter is not none or test_call_stats.avg_latency is not none %}
+    const ctx = document.getElementById('qualityMetricsChart').getContext('2d');
+    new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: ['Packet Loss (%)', 'Jitter (ms)', 'Latency (ms)'],
+            datasets: [{
+                label: 'Average Value',
+                data: [
+                    {{ test_call_stats.avg_packet_loss or 0 }},
+                    {{ test_call_stats.avg_jitter or 0 }},
+                    {{ test_call_stats.avg_latency or 0 }}
+                ],
+                backgroundColor: [
+                    {% if test_call_stats.avg_packet_loss %}
+                        {% if test_call_stats.avg_packet_loss > 5 %}'#dc3545'{% elif test_call_stats.avg_packet_loss > 2 %}'#fd7e14'{% else %}'#198754'{% endif %}
+                    {% else %}
+                        '#6c757d'
+                    {% endif %},
+                    {% if test_call_stats.avg_jitter %}
+                        {% if test_call_stats.avg_jitter > 30 %}'#dc3545'{% elif test_call_stats.avg_jitter > 20 %}'#fd7e14'{% else %}'#198754'{% endif %}
+                    {% else %}
+                        '#6c757d'
+                    {% endif %},
+                    {% if test_call_stats.avg_latency %}
+                        {% if test_call_stats.avg_latency > 150 %}'#dc3545'{% elif test_call_stats.avg_latency > 100 %}'#fd7e14'{% else %}'#198754'{% endif %}
+                    {% else %}
+                        '#6c757d'
+                    {% endif %}
+                ],
+                borderWidth: 1
+            }, {
+                label: 'Threshold',
+                data: [5, 30, 150],
+                type: 'line',
+                borderColor: '#dc3545',
+                backgroundColor: 'transparent',
+                borderDash: [5, 5],
+                pointBackgroundColor: '#dc3545',
+                pointBorderColor: '#dc3545',
+                fill: false
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'top'
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            let label = context.dataset.label + ': ';
+                            if (context.dataIndex === 0) {
+                                label += context.parsed.y.toFixed(2) + '%';
+                            } else {
+                                label += context.parsed.y.toFixed(1) + 'ms';
+                            }
+                            return label;
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Value'
+                    }
+                }
+            }
+        }
+    });
+    {% endif %}
+});
+</script>
+{% endblock %}

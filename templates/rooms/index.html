@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+
+{% block title %}Rooms - VC Monitoring Portal{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1><i class="fas fa-desktop me-2"></i>VC Rooms</h1>
+    {% if current_user.is_admin %}
+    <a href="{{ url_for('rooms.add') }}" class="btn btn-primary">
+        <i class="fas fa-plus me-2"></i>Add Room
+    </a>
+    {% endif %}
+</div>
+
+{% if rooms %}
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover" id="roomsTable">
+                <thead>
+                    <tr>
+                        <th>Room Name</th>
+                        <th>Location</th>
+                        <th>Device Type</th>
+                        <th>Status</th>
+                        <th>Last Health Check</th>
+                        <th>Test Calls</th>
+                        <th>Open Alerts</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for room in rooms %}
+                    <tr>
+                        <td>
+                            <strong>{{ room.name }}</strong>
+                            {% if room.ip_address %}
+                            <br><small class="text-muted">{{ room.ip_address }}</small>
+                            {% endif %}
+                        </td>
+                        <td>{{ room.location or 'Not specified' }}</td>
+                        <td>
+                            <span class="badge bg-info">{{ room.device_type }}</span>
+                        </td>
+                        <td>
+                            <span class="badge bg-{{ get_status_color(room.status) }}">
+                                <i class="fas fa-circle me-1"></i>{{ room.status|title }}
+                            </span>
+                        </td>
+                        <td>
+                            {% if room.latest_health_check %}
+                                <span class="badge bg-{{ get_status_color(room.latest_health_check.status) }}">
+                                    {{ room.latest_health_check.status|title }}
+                                </span>
+                                <br><small class="text-muted">{{ format_timestamp(room.latest_health_check.timestamp) }}</small>
+                            {% else %}
+                                <span class="text-muted">Never</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if room.latest_test_call %}
+                                <span class="badge bg-{{ get_status_color(room.latest_test_call.status) }}">
+                                    {{ room.latest_test_call.status|title }}
+                                </span>
+                                <br><small class="text-muted">{{ format_timestamp(room.latest_test_call.timestamp) }}</small>
+                            {% else %}
+                                <span class="text-muted">Never</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if room.open_alerts_count > 0 %}
+                                <span class="badge bg-warning">{{ room.open_alerts_count }}</span>
+                            {% else %}
+                                <span class="badge bg-success">0</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="btn-group" role="group">
+                                <a href="{{ url_for('rooms.details', room_id=room.id) }}" 
+                                   class="btn btn-sm btn-outline-primary" title="View Details">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                                {% if current_user.is_admin %}
+                                <a href="{{ url_for('rooms.edit', room_id=room.id) }}" 
+                                   class="btn btn-sm btn-outline-secondary" title="Edit">
+                                    <i class="fas fa-edit"></i>
+                                </a>
+                                <form method="POST" action="{{ url_for('rooms.delete', room_id=room.id) }}" 
+                                      class="d-inline" onsubmit="return confirm('Are you sure you want to delete this room?')">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </form>
+                                {% endif %}
+                            </div>
+                            
+                            <div class="btn-group mt-1" role="group">
+                                <form method="POST" action="{{ url_for('monitoring.run_health_check', room_id=room.id) }}" class="d-inline">
+                                    <button type="submit" class="btn btn-sm btn-outline-info" title="Run Health Check">
+                                        <i class="fas fa-stethoscope"></i>
+                                    </button>
+                                </form>
+                                {% if room.test_call_enabled %}
+                                <form method="POST" action="{{ url_for('monitoring.run_test_call', room_id=room.id) }}" class="d-inline">
+                                    <button type="submit" class="btn btn-sm btn-outline-success" title="Run Test Call">
+                                        <i class="fas fa-phone"></i>
+                                    </button>
+                                </form>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="card">
+    <div class="card-body text-center py-5">
+        <i class="fas fa-desktop fa-3x text-muted mb-3"></i>
+        <h4>No Rooms Configured</h4>
+        <p class="text-muted">Get started by adding your first VC room to the monitoring system.</p>
+        {% if current_user.is_admin %}
+        <a href="{{ url_for('rooms.add') }}" class="btn btn-primary">
+            <i class="fas fa-plus me-2"></i>Add Your First Room
+        </a>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+$(document).ready(function() {
+    $('#roomsTable').DataTable({
+        responsive: true,
+        order: [[0, 'asc']],
+        pageLength: 25,
+        columnDefs: [
+            { orderable: false, targets: [-1] } // Disable sorting on actions column
+        ]
+    });
+});
+</script>
+{% endblock %}

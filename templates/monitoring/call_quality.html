@@ -1,0 +1,306 @@
+{% extends "base.html" %}
+
+{% block title %}Call Quality - VC Monitoring Portal{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1><i class="fas fa-signal me-2"></i>Call Quality Monitoring</h1>
+    <div>
+        <button class="btn btn-outline-primary" onclick="location.reload()">
+            <i class="fas fa-sync-alt me-2"></i>Refresh
+        </button>
+    </div>
+</div>
+
+<!-- Quality Statistics Summary -->
+{% if quality_stats %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-chart-bar me-2"></i>Call Quality Summary (Last 7 Days)</h5>
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-md-2">
+                        <h6 class="text-muted">Total Calls</h6>
+                        <h3 class="mb-0">{{ quality_stats.total_calls or 0 }}</h3>
+                    </div>
+                    <div class="col-md-2">
+                        <h6 class="text-muted">Success Rate</h6>
+                        <h3 class="mb-0 text-success">
+                            {% if quality_stats.total_calls and quality_stats.total_calls > 0 %}
+                                {{ "%.1f"|format((quality_stats.successful_calls or 0) / quality_stats.total_calls * 100) }}%
+                            {% else %}
+                                N/A
+                            {% endif %}
+                        </h3>
+                    </div>
+                    <div class="col-md-2">
+                        <h6 class="text-muted">Avg Packet Loss</h6>
+                        <h3 class="mb-0 {% if quality_stats.avg_packet_loss and quality_stats.avg_packet_loss > 5 %}text-danger{% elif quality_stats.avg_packet_loss and quality_stats.avg_packet_loss > 2 %}text-warning{% else %}text-success{% endif %}">
+                            {{ "%.2f"|format(quality_stats.avg_packet_loss or 0) }}%
+                        </h3>
+                    </div>
+                    <div class="col-md-2">
+                        <h6 class="text-muted">Avg Jitter</h6>
+                        <h3 class="mb-0 {% if quality_stats.avg_jitter and quality_stats.avg_jitter > 30 %}text-danger{% elif quality_stats.avg_jitter and quality_stats.avg_jitter > 20 %}text-warning{% else %}text-success{% endif %}">
+                            {{ "%.1f"|format(quality_stats.avg_jitter or 0) }}ms
+                        </h3>
+                    </div>
+                    <div class="col-md-2">
+                        <h6 class="text-muted">Avg Latency</h6>
+                        <h3 class="mb-0 {% if quality_stats.avg_latency and quality_stats.avg_latency > 150 %}text-danger{% elif quality_stats.avg_latency and quality_stats.avg_latency > 100 %}text-warning{% else %}text-success{% endif %}">
+                            {{ "%.1f"|format(quality_stats.avg_latency or 0) }}ms
+                        </h3>
+                    </div>
+                    <div class="col-md-2">
+                        <h6 class="text-muted">Quality Thresholds</h6>
+                        <small class="text-muted">
+                            Packet Loss: &lt;5%<br>
+                            Jitter: &lt;30ms<br>
+                            Latency: &lt;150ms
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Filters -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="GET" class="row g-3">
+            <div class="col-md-4">
+                <label for="room_id" class="form-label">Room</label>
+                <select class="form-select" id="room_id" name="room_id">
+                    <option value="">All Rooms</option>
+                    {% for room in rooms %}
+                    <option value="{{ room.id }}" {% if selected_room_id == room.id %}selected{% endif %}>
+                        {{ room.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label for="status" class="form-label">Status</label>
+                <select class="form-select" id="status" name="status">
+                    <option value="">All Status</option>
+                    <option value="completed" {% if selected_status == 'completed' %}selected{% endif %}>Completed</option>
+                    <option value="failed" {% if selected_status == 'failed' %}selected{% endif %}>Failed</option>
+                    <option value="started" {% if selected_status == 'started' %}selected{% endif %}>Started</option>
+                    <option value="scheduled" {% if selected_status == 'scheduled' %}selected{% endif %}>Scheduled</option>
+                </select>
+            </div>
+            <div class="col-md-4 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary me-2">
+                    <i class="fas fa-filter me-2"></i>Filter
+                </button>
+                <a href="{{ url_for('monitoring.call_quality') }}" class="btn btn-outline-secondary">
+                    <i class="fas fa-times me-2"></i>Clear
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Test Calls Table -->
+{% if test_calls.items %}
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0">Test Call Results</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover" id="testCallsTable">
+                <thead>
+                    <tr>
+                        <th>Room</th>
+                        <th>Timestamp</th>
+                        <th>Status</th>
+                        <th>Duration</th>
+                        <th>Quality Score</th>
+                        <th>Packet Loss</th>
+                        <th>Jitter</th>
+                        <th>Latency</th>
+                        <th>Resolution</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for call in test_calls.items %}
+                    <tr>
+                        <td>
+                            <a href="{{ url_for('rooms.details', room_id=call.room.id) }}" class="text-decoration-none">
+                                <strong>{{ call.room.name }}</strong>
+                            </a>
+                            {% if call.room.location %}
+                            <br><small class="text-muted">{{ call.room.location }}</small>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span title="{{ call.timestamp.strftime('%Y-%m-%d %H:%M:%S UTC') }}">
+                                {{ format_timestamp(call.timestamp) }}
+                            </span>
+                        </td>
+                        <td>
+                            <span class="badge bg-{{ get_status_color(call.status) }}">
+                                {{ call.status|title }}
+                            </span>
+                        </td>
+                        <td>{{ format_duration(call.duration_seconds) }}</td>
+                        <td>
+                            {% if call.call_quality_score %}
+                                <span class="badge bg-{% if call.call_quality_score >= 8 %}success{% elif call.call_quality_score >= 6 %}warning{% else %}danger{% endif %} fs-6">
+                                    {{ call.call_quality_score }}/10
+                                </span>
+                            {% else %}
+                                <span class="text-muted">N/A</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if call.packet_loss_percent is not none %}
+                                <span class="{% if call.packet_loss_percent > 5 %}text-danger fw-bold{% elif call.packet_loss_percent > 2 %}text-warning fw-bold{% else %}text-success{% endif %}">
+                                    {{ "%.2f"|format(call.packet_loss_percent) }}%
+                                </span>
+                                {% if call.packet_loss_percent > 5 %}
+                                    <i class="fas fa-exclamation-triangle text-danger ms-1" title="Exceeds threshold"></i>
+                                {% endif %}
+                            {% else %}
+                                <span class="text-muted">N/A</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if call.jitter_ms is not none %}
+                                <span class="{% if call.jitter_ms > 30 %}text-danger fw-bold{% elif call.jitter_ms > 20 %}text-warning fw-bold{% else %}text-success{% endif %}">
+                                    {{ "%.1f"|format(call.jitter_ms) }}ms
+                                </span>
+                                {% if call.jitter_ms > 30 %}
+                                    <i class="fas fa-exclamation-triangle text-danger ms-1" title="Exceeds threshold"></i>
+                                {% endif %}
+                            {% else %}
+                                <span class="text-muted">N/A</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if call.latency_ms is not none %}
+                                <span class="{% if call.latency_ms > 150 %}text-danger fw-bold{% elif call.latency_ms > 100 %}text-warning fw-bold{% else %}text-success{% endif %}">
+                                    {{ "%.1f"|format(call.latency_ms) }}ms
+                                </span>
+                                {% if call.latency_ms > 150 %}
+                                    <i class="fas fa-exclamation-triangle text-danger ms-1" title="Exceeds threshold"></i>
+                                {% endif %}
+                            {% else %}
+                                <span class="text-muted">N/A</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {{ call.resolution or 'Unknown' }}
+                            {% if call.frame_rate %}
+                                <br><small class="text-muted">{{ call.frame_rate }}fps</small>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <form method="POST" action="{{ url_for('monitoring.run_test_call', room_id=call.room.id) }}" class="d-inline">
+                                <button type="submit" class="btn btn-sm btn-outline-success" title="Run Test Call">
+                                    <i class="fas fa-phone"></i>
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% if call.error_message %}
+                    <tr class="table-danger">
+                        <td colspan="10">
+                            <small><strong>Error:</strong> {{ call.error_message }}</small>
+                        </td>
+                    </tr>
+                    {% endif %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <!-- Pagination -->
+    <div class="card-footer">
+        <div class="d-flex justify-content-between align-items-center">
+            <small class="text-muted">
+                Showing {{ test_calls.per_page * (test_calls.page - 1) + 1 }} to 
+                {{ test_calls.per_page * (test_calls.page - 1) + test_calls.items|length }} of 
+                {{ test_calls.total }} entries
+            </small>
+            
+            {% if test_calls.pages > 1 %}
+            <nav>
+                <ul class="pagination pagination-sm mb-0">
+                    {% if test_calls.has_prev %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('monitoring.call_quality', page=test_calls.prev_num, room_id=selected_room_id, status=selected_status) }}">
+                            Previous
+                        </a>
+                    </li>
+                    {% endif %}
+                    
+                    {% for page_num in test_calls.iter_pages(left_edge=1, right_edge=1, left_current=1, right_current=2) %}
+                        {% if page_num %}
+                            {% if page_num != test_calls.page %}
+                            <li class="page-item">
+                                <a class="page-link" href="{{ url_for('monitoring.call_quality', page=page_num, room_id=selected_room_id, status=selected_status) }}">
+                                    {{ page_num }}
+                                </a>
+                            </li>
+                            {% else %}
+                            <li class="page-item active">
+                                <span class="page-link">{{ page_num }}</span>
+                            </li>
+                            {% endif %}
+                        {% else %}
+                        <li class="page-item disabled">
+                            <span class="page-link">…</span>
+                        </li>
+                        {% endif %}
+                    {% endfor %}
+                    
+                    {% if test_calls.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('monitoring.call_quality', page=test_calls.next_num, room_id=selected_room_id, status=selected_status) }}">
+                            Next
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="card">
+    <div class="card-body text-center py-5">
+        <i class="fas fa-signal fa-3x text-muted mb-3"></i>
+        <h4>No Test Call Data Found</h4>
+        {% if selected_room_id or selected_status %}
+        <p class="text-muted">No test calls match the current filters.</p>
+        <a href="{{ url_for('monitoring.call_quality') }}" class="btn btn-outline-primary">
+            <i class="fas fa-times me-2"></i>Clear Filters
+        </a>
+        {% else %}
+        <p class="text-muted">Test call results will appear here once calls are executed.</p>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+$(document).ready(function() {
+    // Auto-refresh every 2 minutes
+    setTimeout(function() {
+        location.reload();
+    }, 120000);
+});
+</script>
+{% endblock %}
